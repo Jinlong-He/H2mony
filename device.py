@@ -5,7 +5,7 @@ import time
 import uiautomator2
 from app import App
 from adb import ADB
-from minicap import Minicap
+# from minicap import Minicap
 from loguru import logger
 
 DEFAULT_NUM = '1234567890'
@@ -40,7 +40,7 @@ class Device(object):
 
         self.adb = ADB(device=self)
         self.u2 = uiautomator2.connect(self.serial)
-        self.minicap = Minicap(device=self)
+        # self.minicap = Minicap(device=self)
     
     def check_connectivity(self):
         return self.adb.check_connectivity()

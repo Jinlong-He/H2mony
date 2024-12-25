@@ -11,7 +11,7 @@ class Explorer(object):
         self.app = app
         self.adb = device.adb
         self.u2 = device.u2
-        self.minicap = device.minicap
+        # self.minicap = device.minicap
     
     def explore_dfs(self, depth):
         return
@@ -20,7 +20,9 @@ class Explorer(object):
     def explore_for_audio(self, hstg):
         # hstg.add_state()
         # print(hstg.states[0].act_name, hstg.states[0].audio_status)
-        self.minicap.set_up()
+
+        # self.minicap.set_up()
+
         #strategy 1 网易云
         # view = self.u2(clickable='true', content='播放暂停')
         # if view.exists:
