@@ -2,9 +2,9 @@ import subprocess
 import re
 from loguru import logger
 try:
-    from shlex import quote # Python 3
+    from shlex import quote  # Python 3
 except ImportError:
-    from pipes import quote # Python 2
+    from pipes import quote  # Python 2
 
 class ADBException(Exception):
     """
@@ -19,8 +19,8 @@ class ADB(object):
     def __init__(self, device=None):
         self.device = device
         self.cmd_prefix = ['adb', "-s", device.serial]
+        self.sdk = self.get_sdk()
 
-    
     def run_cmd(self, extra_args):
         """
         run a command and return the output
@@ -121,6 +121,14 @@ class ADB(object):
             return uid
         else :
             return -1
+
+    def get_pid(self, package_name, service_name):
+        process_lines = self.shell_grep("ps", "%s:%s" % (package_name, service_name)).splitlines()
+        if len(process_lines) > 0:
+            pid = str(process_lines[0].split()[1])
+            return pid
+        else:
+            return -1
     
     def get_audio_status(self, package_name):
         """
@@ -128,35 +136,41 @@ class ADB(object):
         :return: a dict, each key is a package name of an app and each value is the file path to the apk
         """
         audio_lines = self.shell_grep("dumpsys audio", "AudioPlaybackConfiguration").splitlines()
-        audio_line_re = re.compile(".*u/pid:(.*)/.*state:(.*) attr.*")
+        # uid pid
+        audio_line_re = re.compile(".*u/pid:(.*)/(.*) .*state:(.*) attr.*")
         audio_status_dict = {}
         started_count = 0
         for audio_line in audio_lines:
             m = audio_line_re.match(audio_line)
             if m:
                 uid = m.group(1)
-                status = m.group(2)
-                audio_status_dict[uid] = status
+                pid = m.group(2)
+                status = m.group(3)
+                audio_status_dict[(uid, pid)] = status
                 if status == 'started':
                     started_count += 1
-        focus_lines = self.shell_grep("dumpsys audio", "source").splitlines()
-        focus_line_re = re.compile(".* pack: (.*) -- client.* gain: (.*) -- flags.* loss: (.*) -- notified.*")
-        focus_dict = {}
-        for focus_line in focus_lines:
-            m = focus_line_re.match(focus_line)
-            if m:
-                focus_dict[m.group(1)] = (m.group(2), m.group(3))
+        # todo change focus_lines
+        # focus_lines = self.shell_grep("dumpsys audio", "source").splitlines()
+        # focus_line_re = re.compile(".* pack: (.*) -- client.* gain: (.*) -- flags.* loss: (.*) -- notified.*")
+        # focus_dict = {}
+        # for focus_line in focus_lines:
+        #     m = focus_line_re.match(focus_line)
+        #     if m:
+        #         focus_dict[m.group(1)] = (m.group(2), m.group(3))
         uid = self.get_uid(package_name)
-        if audio_status_dict[uid] == 'paused':
+        pid = self.get_pid(package_name, service_name)
+        if (uid, pid) not in audio_status_dict:
+            return ''
+        if audio_status_dict[(uid, pid)] == 'paused':
             if package_name not in focus_dict:
                 return 'PAUSE'
             if focus_dict[package_name][1] == 'LOSS_TRANSIENT':
                 return 'PAUSE*'
             else:
                 return 'PAUSE'
-        if audio_status_dict[uid] == 'stopped' or audio_status_dict[uid] == 'idle':
+        if audio_status_dict[(uid, pid)] == 'stopped' or audio_status_dict[(uid, pid)] == 'idle':
             return 'STOP'
-        if audio_status_dict[uid] == 'started':
+        if audio_status_dict[(uid, pid)] == 'started':
             if package_name not in focus_dict:
                 if started_count > 1:
                     return 'START*'
@@ -173,7 +187,7 @@ class ADB(object):
     def get_current_package(self):
         focus_lines = self.shell_grep("dumpsys window", "mCurrentFocus").splitlines()
         package_re = re.compile(".*u0 (.*)/.*")
-        if len(focus_lines) > 0 :
+        if len(focus_lines) > 0:
             for focus_line in focus_lines:
                 m = package_re.match(focus_line)
                 if m:
@@ -197,3 +211,6 @@ class ADB(object):
         @return:
         """
         return self.shell(["getprop", property_name])
+
+    def get_sdk(self):
+        return self.get_property("ro.build.version.sdk")
