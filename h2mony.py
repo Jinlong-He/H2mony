@@ -28,6 +28,3 @@ class H2mony(object):
     def hop(self, source_device, target_device, app):
         return
 
-
-h2mony = H2mony()
-h2mony.explore_for_hopping(h2mony.device_list[0])
