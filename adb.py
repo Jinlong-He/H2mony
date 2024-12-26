@@ -120,23 +120,33 @@ class ADB(object):
             uid = str(int(usr_name.split('_a')[1]) + 10000)
             return uid
         else :
-            return -1
+            return
 
     def get_pid(self, package_name, service_name):
+        #wait for check whether service_name is form of pakage_name:service_name
         process_lines = self.shell_grep("ps", "%s:%s" % (package_name, service_name)).splitlines()
         if len(process_lines) > 0:
             pid = str(process_lines[0].split()[1])
             return pid
         else:
-            return -1
-    
+            return
+
+    def get_service_name(self, package_name, pid):
+        process_lines = self.shell_grep("ps", package_name).splitlines()
+        if len(process_lines) > 0:
+            for process_line in process_lines:
+                if process_line.split()[1] == pid:
+                    service_name = process_line.split()[8]
+                    return service_name
+        else:
+            return
+
     def get_audio_status(self, package_name):
         """
         Get the audio status of given app on the device
         :return: a dict, each key is a package name of an app and each value is the file path to the apk
         """
         audio_lines = self.shell_grep("dumpsys audio", "AudioPlaybackConfiguration").splitlines()
-        # uid pid
         audio_line_re = re.compile(".*u/pid:(.*)/(.*) .*state:(.*) attr.*")
         audio_status_dict = {}
         started_count = 0
@@ -149,37 +159,56 @@ class ADB(object):
                 audio_status_dict[(uid, pid)] = status
                 if status == 'started':
                     started_count += 1
-        # todo change focus_lines
-        # focus_lines = self.shell_grep("dumpsys audio", "source").splitlines()
-        # focus_line_re = re.compile(".* pack: (.*) -- client.* gain: (.*) -- flags.* loss: (.*) -- notified.*")
-        # focus_dict = {}
-        # for focus_line in focus_lines:
-        #     m = focus_line_re.match(focus_line)
-        #     if m:
-        #         focus_dict[m.group(1)] = (m.group(2), m.group(3))
-        uid = self.get_uid(package_name)
-        pid = self.get_pid(package_name, service_name)
-        if (uid, pid) not in audio_status_dict:
-            return ''
-        if audio_status_dict[(uid, pid)] == 'paused':
-            if package_name not in focus_dict:
-                return 'PAUSE'
-            if focus_dict[package_name][1] == 'LOSS_TRANSIENT':
-                return 'PAUSE*'
-            else:
-                return 'PAUSE'
-        if audio_status_dict[(uid, pid)] == 'stopped' or audio_status_dict[(uid, pid)] == 'idle':
-            return 'STOP'
-        if audio_status_dict[(uid, pid)] == 'started':
-            if package_name not in focus_dict:
-                if started_count > 1:
-                    return 'START*'
+        req_focus_lines = self.shell_grep("dumpsys audio", "requestAudioFocus").splitlines()
+        req_focus_line_re = re.compile(".*uid/pid (\d*)/(\d*) .*clientId=(.*) callingPack=.*")
+        client_dict = {}
+        started_count = 0
+        for req_focus_line in req_focus_lines:
+            m = req_focus_line_re.match(req_focus_line)
+            if m:
+                uid = str(m.group(1))
+                pid = str(m.group(2))
+                client_id = m.group(3)
+                client_dict[client_id] = (uid, pid)
+        focus_lines = self.shell_grep("dumpsys audio", "source:").splitlines()
+        focus_line_re = re.compile(".* pack: (.*) -- client: (.*) -- gain: (.*) -- flags.* loss: (.*) -- notified.*")
+        focus_dict = {}
+        for focus_line in focus_lines:
+            print(focus_line)
+            m = focus_line_re.match(focus_line)
+            if m:
+                (uid, pid) = client_dict[m.group(2)]
+                focus_dict[(uid, pid)] = (m.group(3), m.group(4))
+        audio_status = {}
+        uid_ = self.get_uid(package_name)
+        print(focus_dict)
+        for (uid, pid), status in audio_status_dict.items():
+            if uid != uid_:
+                continue
+            service_name = self.get_service_name(package_name, pid)
+            if status == 'paused':
+                if (uid, pid) not in focus_dict:
+                    audio_status[service_name] = 'PAUSE'
+                    continue
+                if focus_dict[(uid, pid)][1] == 'LOSS_TRANSIENT':
+                    audio_status[service_name] = 'PAUSE*'
                 else:
-                    return 'START'
-            if focus_dict[package_name][1] == 'LOSS_TRANSIENT_CAN_DUCK':
-                return 'DUCK'
-            else:
-                return 'START'
+                    audio_status[service_name] = 'PAUSE'
+            if status == 'stopped' or status == 'idle':
+                audio_status[service_name] = 'STOP'
+            if status == 'started':
+                if (uid, pid) not in focus_dict:
+                    if started_count > 1:
+                        audio_status[service_name] = 'START*'
+                    else:
+                        audio_status[service_name] = 'START'
+                    continue
+                if focus_dict[(uid, pid)][1] == 'LOSS_TRANSIENT_CAN_DUCK':
+                    audio_status[service_name] = 'DUCK'
+                else:
+                    audio_status[service_name] = 'START'
+        return audio_status
+
         # audio_line_re = re.compile(".*u/pid:(.*)/.*state:(.*) attr.*")
         # if audio_status_dict[self.get_uid(package_name)] == 'started':
         # return status
