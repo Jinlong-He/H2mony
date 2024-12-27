@@ -26,21 +26,29 @@ class Explorer(object):
             return
         # todo elements order filter
         package_name = self.package_name
-        xml_hierarchy = self.u2.dump_hierarchy()
-        with open(f'xml_hierarchy.xml', 'w', encoding='utf-8') as f:
-            f.write(xml_hierarchy)
+        # xml_hierarchy = self.u2.dump_hierarchy()
+        # with open(f'xml_hierarchy.xml', 'w', encoding='utf-8') as f:
+        #     f.write(xml_hierarchy)
         for element in elements:
             if not service_list:
                 return
             # following two lines only for testing
-            content_desc = element.info.get('contentDescription', '')
-            if '播放' in content_desc:
+            # content_desc = element.info.get('contentDescription', '')
+            # if '播放' in content_desc:
+
+            class_name = element.info.get('className', '')
+            if not class_name:
+                assert False
+            if class_name in ['android.view.ViewGroup', 'android.widget.RelativeLayout']:
+                continue
+            if True:
                 element.click()
                 time.sleep(1)
                 hstg.add_event(element)
-                if True in hstg.add_state():
+                if hstg.add_state()[1]:
                     audio_status = self.adb.get_audio_status(package_name)
                     if audio_status:
+                        # todo tocheck
                         keys = [key.split(":")[-1] for key, value in audio_status.items() if
                                 key.split(":")[-1] in service_list and value in ['START', 'START*', 'DUCK']]
                         if keys:

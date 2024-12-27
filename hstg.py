@@ -11,8 +11,13 @@ class State(object):
 
     def __eq__(self, other):
         if isinstance(other, State):
-            return self.act_name == other.act_name and self.audio_status == other.audio_status
+            return self.act_name == other.act_name and \
+                   self.audio_status == other.audio_status and \
+                   self.similarity(other)
         return False
+
+    def similarity(self, other):
+        return True
 
 
 class Edge(object):
@@ -22,6 +27,7 @@ class Edge(object):
         self.events = events
 
 
+# todo click event
 class Event(object):
     def __init__(self, elem):
         # pos
@@ -33,6 +39,7 @@ class Event(object):
         if not bounds:
             assert False
         print(f'bounds={bounds}')
+        print(f"className={elem.info.get('className')}")
         top = bounds.get('top')
         bottom = bounds.get('bottom')
         left = bounds.get('left')
@@ -72,12 +79,12 @@ class HSTG(object):
             self.visit_states.pop()
         if state == check_state:
             return
-        self.go_state()
+        self.goto_state()
         return
 
     # todo
     # 思路 重启应用 visit_states+edges 点击
-    def go_state(self):
+    def goto_state(self):
         print("restart app")
         print(f"go to state[{self.visit_states[-1]}]")
         pass
@@ -89,13 +96,13 @@ class HSTG(object):
         state = State(act_name, audio_status)
         # todo state isequal
         if state in self.states:
-            return state, False
+            return (state, False)
         self.states.append(state)
         self.visit_states.append(state.num)
         global state_num
         state_num += 1
         print(f"add state[{state.num}] {state.act_name} {state.audio_status}")
-        return state, True
+        return (state, True)
 
     def add_edge(self):
         # source, target, events
