@@ -20,34 +20,41 @@ class Explorer(object):
         if not service_list:
             return
         if not depth:
-            hstg.del_event()
             return
-        u2 = self.u2
-        elements = u2(clickable='true')
+        elements = self.u2(clickable='true')
         if not elements:
-            hstg.del_event()
             return
         # todo elements order filter
         package_name = self.package_name
+        xml_hierarchy = self.u2.dump_hierarchy()
+        with open(f'xml_hierarchy.xml', 'w', encoding='utf-8') as f:
+            f.write(xml_hierarchy)
         for element in elements:
-            element.click()
-            time.sleep(1)
-            hstg.add_event(element)
-            audio_status = self.adb.get_audio_status(package_name)
-            if audio_status:
-                flag = False
-                keys = [key for key, value in audio_status.items() if key in service_list and value in ['START', 'START*', 'DUCK']]
-                if keys:
-                    flag = True
-                    service_list = service_list - keys
-                # service start
-                if flag and True in hstg.add_state():
-                    print(f"add state: {hstg.now_state.act_name}, {hstg.now_state.audio_status}")
+            if not service_list:
+                return
+            # following two lines only for testing
+            content_desc = element.info.get('contentDescription', '')
+            if '播放' in content_desc:
+                element.click()
+                time.sleep(1)
+                hstg.add_event(element)
+                if True in hstg.add_state():
+                    audio_status = self.adb.get_audio_status(package_name)
+                    if audio_status:
+                        keys = [key.split(":")[-1] for key, value in audio_status.items() if
+                                key.split(":")[-1] in service_list and value in ['START', 'START*', 'DUCK']]
+                        if keys:
+                            print(f'keys={keys}')
+                            service_list = list(set(service_list) - set(keys))
+                            print(f'service_list={service_list}')
                     hstg.add_edge()
-            self.explore_dfs(depth-1, hstg, service_list)
-            hstg.del_event(element)
-            # back to bef state
-            hstg.back()
+                    self.explore_dfs(depth - 1, hstg, service_list)
+                    # 回退至上个state
+                    hstg.back_state(hstg.visit_states[-2])
+                else:
+                    self.explore_dfs(depth - 1, hstg, service_list)
+                    # 回退至本个state
+                    hstg.back_state(hstg.visit_states[-1])
         return
 
     def explore_bfs(self, hstg, service_list=[]):
@@ -100,7 +107,10 @@ class Explorer(object):
         return
 
     def test_explore_for_audio(self, hstg, service_list=[]):
-        # xml_hierarchy = self.u2.dump_hierarchy()
-        # with open(f'xml_hierarchy.xml', 'w', encoding='utf-8') as f:
-        #     f.write(xml_hierarchy)
-        pass
+        xml_hierarchy = self.u2.dump_hierarchy()
+        with open(f'xml_hierarchy.xml', 'w', encoding='utf-8') as f:
+            f.write(xml_hierarchy)
+        tree = ET.ElementTree(ET.fromstring(xml_hierarchy))
+        root = tree.getroot()
+        for node in root.iter('node'):
+            print(node)
