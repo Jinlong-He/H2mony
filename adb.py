@@ -19,7 +19,7 @@ class ADB(object):
     def __init__(self, device=None):
         self.device = device
         self.cmd_prefix = ['adb', "-s", device.serial]
-        self.sdk = self.get_sdk()
+        self.sdk = self.get_sdk_version()
 
     def run_cmd(self, extra_args):
         """
@@ -174,14 +174,14 @@ class ADB(object):
         focus_line_re = re.compile(".* pack: (.*) -- client: (.*) -- gain: (.*) -- flags.* loss: (.*) -- notified.*")
         focus_dict = {}
         for focus_line in focus_lines:
-            print(focus_line)
+            # print(focus_line)
             m = focus_line_re.match(focus_line)
             if m:
                 (uid, pid) = client_dict[m.group(2)]
                 focus_dict[(uid, pid)] = (m.group(3), m.group(4))
         audio_status = {}
         uid_ = self.get_uid(package_name)
-        print(focus_dict)
+        # print(focus_dict)
         for (uid, pid), status in audio_status_dict.items():
             if uid != uid_:
                 continue
@@ -241,5 +241,53 @@ class ADB(object):
         """
         return self.shell(["getprop", property_name])
 
-    def get_sdk(self):
-        return self.get_property("ro.build.version.sdk")
+    def get_sdk_version(self):
+        return int(self.get_property("ro.build.version.sdk"))
+    
+    def get_display_info(self):
+        """
+        Gets C{mDefaultViewport} and then C{deviceWidth} and C{deviceHeight} values from dumpsys.
+        This is a method to obtain display dimensions and density
+        """
+        display_info = {}
+        logical_display_re = re.compile(".*DisplayViewport{valid=true, .*orientation=(?P<orientation>\d+),"
+                                        " .*deviceWidth=(?P<width>\d+), deviceHeight=(?P<height>\d+).*")
+        dumpsys_display_result = self.shell("dumpsys display")
+        if dumpsys_display_result is not None:
+            for line in dumpsys_display_result.splitlines():
+                m = logical_display_re.search(line, 0)
+                if m:
+                    for prop in ['width', 'height', 'orientation']:
+                        display_info[prop] = int(m.group(prop))
+
+        if 'width' not in display_info or 'height' not in display_info:
+            physical_display_re = re.compile('Physical size: (?P<width>\d+)x(?P<height>\d+)')
+            m = physical_display_re.search(self.shell('wm size'))
+            if m:
+                for prop in ['width', 'height']:
+                    display_info[prop] = int(m.group(prop))
+
+        if 'width' not in display_info or 'height' not in display_info:
+            # This could also be mSystem or mOverscanScreen
+            display_re = re.compile('\s*mUnrestrictedScreen=\((?P<x>\d+),(?P<y>\d+)\) (?P<width>\d+)x(?P<height>\d+)')
+            # This is known to work on older versions (i.e. API 10) where mrestrictedScreen is not available
+            display_width_height_re = re.compile('\s*DisplayWidth=(?P<width>\d+) *DisplayHeight=(?P<height>\d+)')
+            for line in self.shell('dumpsys window').splitlines():
+                m = display_re.search(line, 0)
+                if not m:
+                    m = display_width_height_re.search(line, 0)
+                if m:
+                    for prop in ['width', 'height']:
+                        display_info[prop] = int(m.group(prop))
+
+        if 'orientation' not in display_info:
+            surface_orientation_re = re.compile("SurfaceOrientation:\s+(\d+)")
+            output = self.shell("dumpsys input")
+            m = surface_orientation_re.search(output)
+            if m:
+                display_info['orientation'] = int(m.group(1))
+
+        display_info_keys = {'width', 'height', 'orientation'}
+        if not display_info_keys.issuperset(display_info):
+            logger.warning("getDisplayInfo failed to get: %s" % display_info_keys)
+        return display_info

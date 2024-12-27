@@ -5,7 +5,7 @@ import time
 import uiautomator2
 from app import App
 from adb import ADB
-# from minicap import Minicap
+from minicap import Minicap
 from loguru import logger
 
 DEFAULT_NUM = '1234567890'
@@ -40,7 +40,10 @@ class Device(object):
 
         self.adb = ADB(device=self)
         self.u2 = uiautomator2.connect(self.serial)
-        # self.minicap = Minicap(device=self)
+        self.display_info = None
+        self.__used_ports = []
+        self.minicap = Minicap(device=self)
+        self.sdk_version = self.adb.get_sdk_version()
     
     def check_connectivity(self):
         return self.adb.check_connectivity()
@@ -61,8 +64,6 @@ class Device(object):
         package_name = app.get_package_name()
         if package_name not in self.connector.get_installed_apps():
             install_cmd = ["adb", "-s", self.serial, "install", "-r"]
-            # if self.grant_perm and self.get_sdk_version() >= 23:
-            #     install_cmd.append("-g")
             install_cmd.append(app.app_path)
             install_p = subprocess.Popen(install_cmd, stdout=subprocess.PIPE)
             while self.check_connectivity() and package_name not in self.connector.get_installed_apps():
@@ -126,3 +127,36 @@ class Device(object):
 
     def pull_file(self, remote_file, local_file):
         self.adb.run_cmd(["pull", remote_file, local_file])
+
+    def get_display_info(self, refresh=True):
+        """
+        get device display information, including width, height, and density
+        :param refresh: if set to True, refresh the display info instead of using the old values
+        :return: dict, display_info
+        """
+        if self.display_info is None or refresh:
+            self.display_info = self.adb.get_display_info()
+        return self.display_info
+
+    def get_random_port(self):
+        """
+        get a random port on host machine to establish connection
+        :return: a port number
+        """
+        import socket
+        temp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        temp_sock.bind(("", 0))
+        port = temp_sock.getsockname()[1]
+        temp_sock.close()
+        if port in self.__used_ports:
+            return self.get_random_port()
+        self.__used_ports.append(port)
+        return port
+    
+    def get_sdk_version(self):
+        """
+        Get version of current SDK
+        """
+        if self.sdk_version is None:
+            self.sdk_version = self.adb.get_sdk_version()
+        return self.sdk_version
