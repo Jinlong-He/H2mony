@@ -3,7 +3,6 @@ import sys
 import time
 import subprocess
 from datetime import datetime
-import cv2
 import os
 from loguru import logger
 

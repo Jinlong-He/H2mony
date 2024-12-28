@@ -7,3 +7,4 @@ class View(object):
         left, right, top, bottom = int(info['left']), int(info['right']), int(info['top']), int(info['bottom'])
         self.bound = [left, top, right - left, bottom - top]
         self.img = None
+        self.img_hdash = None
