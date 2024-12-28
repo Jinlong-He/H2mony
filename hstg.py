@@ -3,6 +3,8 @@ import xml.etree.ElementTree as ET
 from lxml import etree
 import difflib
 from view import View
+from window import Window
+import cv
 
 state_num = 0
 
@@ -230,6 +232,9 @@ class HSTG(object):
         return
 
     def dump_views(self):
+        window = Window()
+        window.img = cv.load_image_from_buf(self.device.minicap.last_sreen)
+        window.img_dhash = cv.calculate_dhash(window.img)
         ui_xml = self.u2.dump_hierarchy()
         root = ET.fromstring(ui_xml.encode("utf-8"))
         views = []

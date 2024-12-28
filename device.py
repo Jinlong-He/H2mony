@@ -44,6 +44,7 @@ class Device(object):
         self.__used_ports = []
         self.minicap = Minicap(device=self)
         self.sdk_version = self.adb.get_sdk_version()
+        self.minicap.connect()
     
     def check_connectivity(self):
         return self.adb.check_connectivity()
