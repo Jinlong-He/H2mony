@@ -118,40 +118,41 @@ class Explorer(object):
             return
         if not depth:
             return
-        elements = self.u2(clickable='true')
-        if not elements:
-            return
-        print(f'elem_len={len(elements)}')
+        # elements = self.u2(clickable='true')
+        # if not elements:
+        #     return
+        # print(f'elem_len={len(elements)}')
         # todo elements order filter
         package_name = self.package_name
         # xml_hierarchy = self.u2.dump_hierarchy()
         # with open(f'xml_hierarchy.xml', 'w', encoding='utf-8') as f:
         #     f.write(xml_hierarchy)
         #     return
-        elements_info = [element.info for element in elements]
-        for element_info in elements_info:
+        # elements_info = [element.info for element in elements]
+        views = hstg.states[hstg.visit_states[-1]].views
+        for view in views:
             if not service_list:
                 return
-            # following two lines only for testing
-            content_desc = element_info.get('contentDescription', '')
-            if '返回' in content_desc:
+
+            if view.clickable in ['false', 'False']:
                 continue
-            class_name = element_info.get('className', '')
-            if class_name in ['android.view.View', 'android.view.ViewGroup',
+            if '返回' in view.description:
+                continue
+            if view.class_name in ['android.view.View', 'android.view.ViewGroup',
                               'android.widget.RelativeLayout']:
                 continue
-            print(f'content_desc={content_desc}')
-            print(f'class_name={class_name}')
 
-            hstg.add_event(element_info)
+            print(f'clickable={view.clickable}')
+            print(f'description={view.description}')
+            print(f'class_name={view.class_name}')
+
+            hstg.add_event(view.bound)
             hstg.handle_event(hstg.events[-1])
             # element.click()
-            time.sleep(1)
 
             if hstg.add_state()[1]:
                 audio_status = self.adb.get_audio_status(package_name)
                 if audio_status:
-                    # todo tocheck
                     keys = [key.split(":")[-1] for key, value in audio_status.items() if
                             key.split(":")[-1] in service_list and value in ['START', 'START*', 'DUCK']]
                     if keys:
@@ -168,14 +169,13 @@ class Explorer(object):
                 hstg.back_state(hstg.visit_states[-1])
         return
 
-    def dump_views(self):
-        ui_xml = self.u2.dump_hierarchy()
-        # need to check
-        root = ET.fromstring(ui_xml.encode("utf-8"))
-        views = []
-        for node in root.iter('node'):
-            view = View(node, 'xml')
-            views.append(view)
-            node.attrib = {'bounds': node.attrib['bounds']}
-        return (views, root)
+    # def dump_views(self):
+    #     ui_xml = self.u2.dump_hierarchy()
+    #     root = ET.fromstring(ui_xml.encode("utf-8"))
+    #     views = []
+    #     for node in root.iter('node'):
+    #         view = View(node, 'xml')
+    #         views.append(view)
+    #         node.attrib = {'bounds': node.attrib['bounds']}
+    #     return (views, root)
 
