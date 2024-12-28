@@ -1,6 +1,7 @@
 from device import Device
 from app import App
 from hstg import HSTG
+from view import View
 import time
 import uiautomator2
 import xml.etree.ElementTree as ET
@@ -166,3 +167,15 @@ class Explorer(object):
                 # 回退至本个state
                 hstg.back_state(hstg.visit_states[-1])
         return
+
+    def dump_views(self):
+        ui_xml = self.u2.dump_hierarchy()
+        # need to check
+        root = ET.fromstring(ui_xml.encode("utf-8"))
+        views = []
+        for node in root.iter('node'):
+            view = View(node, 'xml')
+            views.append(view)
+            node.attrib = {'bounds': node.attrib['bounds']}
+        return (views, root)
+
