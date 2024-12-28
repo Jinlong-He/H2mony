@@ -1,3 +1,5 @@
+import time
+
 state_num = 0
 
 
@@ -7,7 +9,7 @@ class State(object):
         # audio_status: key=service_name value=status
         self.audio_status = audio_status
         global state_num
-        self.num = state_num
+        self.id = state_num
 
     def __eq__(self, other):
         if isinstance(other, State):
@@ -21,37 +23,40 @@ class State(object):
 
 
 class Edge(object):
-    def __init__(self, source_state_num, target_state_num, events):
-        self.source_state_num = source_state_num
-        self.target_state_num = target_state_num
+    def __init__(self, source_state_id, target_state_id, events):
+        self.source_state_id = source_state_id
+        self.target_state_id = target_state_id
         self.events = events
 
 
-# todo click event
 class Event(object):
-    def __init__(self, elem):
-        # pos
-        # self.elem = elem
-        info = elem.info
-        if not info:
-            assert False
+    def __init__(self, info):
+        self.x, self.y = self.get_coord(info)
+
+    def get_coord(self, info):
         bounds = info.get('bounds')
-        if not bounds:
-            assert False
         print(f'bounds={bounds}')
-        print(f"className={elem.info.get('className')}")
+        # print(f"className={info.get('className')}")
         top = bounds.get('top')
         bottom = bounds.get('bottom')
         left = bounds.get('left')
         right = bounds.get('right')
-        self.posx = int((left+right)/2)
-        self.posy = int((top+bottom)/2)
+        x = int((left + right) / 2)
+        y = int((top + bottom) / 2)
+        return x, y
+
+
+class ClickEvent(Event):
+    def __init__(self, info):
+        super().__init__(info)
 
 
 class HSTG(object):
     def __init__(self, device):
         # self.app = app
         self.device = device
+        self.u2 = device.u2
+        self.adb = device.adb
         self.states = []
         self.edges = []
         self.events = []
@@ -66,28 +71,55 @@ class HSTG(object):
         不相等则重启
         相等则返回
     """
-    def back_state(self, state_num):
-        print(f"back to state[{state_num}]")
+    def back_state(self, state_id):
+        print(f"++todo: back to state[{state_id}]")
         self.del_event()
         self.device.u2.press('back')
-        check_state = self.states[state_num]
-        package_name = self.device.adb.get_current_package()
-        act_name = self.device.adb.get_current_activity()
-        audio_status = self.device.adb.get_audio_status(package_name)
+        check_state = self.states[state_id]
+        package_name = self.adb.get_current_package()
+        act_name = self.adb.get_current_activity()
+        audio_status = self.adb.get_audio_status(package_name)
         state = State(act_name, audio_status)
-        if self.visit_states[-1] != state_num:
+        if self.visit_states[-1] != state_id:
             self.visit_states.pop()
         if state == check_state:
+            print(f"--done: back to state[{state_id}]")
             return
         self.goto_state()
         return
 
-    # todo
-    # 思路 重启应用 visit_states+edges 点击
     def goto_state(self):
-        print("restart app")
-        print(f"go to state[{self.visit_states[-1]}]")
-        pass
+        package_name = self.adb.get_current_package()
+        print("--stop app")
+        self.u2.app_stop(package_name)
+        time.sleep(1)
+        print("--restart app")
+        self.u2.app_start(package_name)
+        # todo 开屏广告
+        # while True:
+        #     time.sleep(5)
+        #     package_name = self.adb.get_current_package()
+        #     act_name = self.adb.get_current_activity()
+        #     audio_status = self.adb.get_audio_status(package_name)
+        #     state = State(act_name, audio_status)
+        #     if state == self.states[0]:
+        #         break
+        time.sleep(10)
+        print("--at state[0]")
+        if len(self.visit_states) == 1:
+            print("--done: back to state[0]")
+            return
+        state_pairs = zip(self.visit_states[::], self.visit_states[1::])
+        for state_pair in state_pairs:
+            # print(f'state_pair={state_pair}')
+            events = [edge.events for edge in self.edges
+                      if edge.source_state_id == state_pair[0]
+                      and edge.target_state_id == state_pair[1]]
+            if events:
+                for event in events[0]:
+                    self.handle_event(event)
+        print(f"--done: back to state[{self.visit_states[-1]}]")
+        return
 
     def add_state(self):
         package_name = self.device.adb.get_current_package()
@@ -98,10 +130,10 @@ class HSTG(object):
         if state in self.states:
             return (state, False)
         self.states.append(state)
-        self.visit_states.append(state.num)
+        self.visit_states.append(state.id)
         global state_num
         state_num += 1
-        print(f"add state[{state.num}] {state.act_name} {state.audio_status}")
+        print(f"add state[{state.id}] {state.act_name} {state.audio_status}")
         return (state, True)
 
     def add_edge(self):
@@ -115,13 +147,20 @@ class HSTG(object):
         print(f"add edge[{source}]->[{target}]")
         return
 
-    def add_event(self, elem):
-        event = Event(elem)
-        self.events.append(event)
-        print(f"click: ({self.events[-1].posx},{self.events[-1].posy})")
+    def add_event(self, elem_info, event_type=1):
+        if event_type == 1:
+            event = ClickEvent(elem_info)
+            self.events.append(event)
         return
 
     def del_event(self):
         if len(self.events):
             self.events.pop()
+        return
+
+    def handle_event(self, event):
+        if isinstance(event, ClickEvent):
+            self.device.u2.click(event.x, event.y)
+            print(f"click: ({event.x},{event.y})")
+            time.sleep(1)
         return

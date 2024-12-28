@@ -26,43 +26,30 @@ class Explorer(object):
             return
         # todo elements order filter
         package_name = self.package_name
-        # xml_hierarchy = self.u2.dump_hierarchy()
-        # with open(f'xml_hierarchy.xml', 'w', encoding='utf-8') as f:
-        #     f.write(xml_hierarchy)
         for element in elements:
             if not service_list:
                 return
-            # following two lines only for testing
-            # content_desc = element.info.get('contentDescription', '')
-            # if '播放' in content_desc:
-
-            class_name = element.info.get('className', '')
-            if not class_name:
-                assert False
-            if class_name in ['android.view.ViewGroup', 'android.widget.RelativeLayout']:
-                continue
-            if True:
-                element.click()
-                time.sleep(1)
-                hstg.add_event(element)
-                if hstg.add_state()[1]:
-                    audio_status = self.adb.get_audio_status(package_name)
-                    if audio_status:
-                        # todo tocheck
-                        keys = [key.split(":")[-1] for key, value in audio_status.items() if
-                                key.split(":")[-1] in service_list and value in ['START', 'START*', 'DUCK']]
-                        if keys:
-                            print(f'keys={keys}')
-                            service_list = list(set(service_list) - set(keys))
-                            print(f'service_list={service_list}')
-                    hstg.add_edge()
-                    self.explore_dfs(depth - 1, hstg, service_list)
-                    # 回退至上个state
-                    hstg.back_state(hstg.visit_states[-2])
-                else:
-                    self.explore_dfs(depth - 1, hstg, service_list)
-                    # 回退至本个state
-                    hstg.back_state(hstg.visit_states[-1])
+            hstg.add_event(element)
+            element.click()
+            time.sleep(1)
+            if hstg.add_state()[1]:
+                audio_status = self.adb.get_audio_status(package_name)
+                if audio_status:
+                    # todo tocheck
+                    keys = [key.split(":")[-1] for key, value in audio_status.items() if
+                            key.split(":")[-1] in service_list and value in ['START', 'START*', 'DUCK']]
+                    if keys:
+                        print(f'keys={keys}')
+                        service_list = list(set(service_list) - set(keys))
+                        print(f'service_list={service_list}')
+                hstg.add_edge()
+                self.explore_dfs(depth - 1, hstg, service_list)
+                # 回退至上个state
+                hstg.back_state(hstg.visit_states[-2])
+            else:
+                self.explore_dfs(depth - 1, hstg, service_list)
+                # 回退至本个state
+                hstg.back_state(hstg.visit_states[-1])
         return
 
     def explore_bfs(self, hstg, service_list=[]):
@@ -122,3 +109,60 @@ class Explorer(object):
         root = tree.getroot()
         for node in root.iter('node'):
             print(node)
+
+    def test_explore_dfs(self, depth, hstg, service_list=None):
+        if service_list is None:
+            service_list = []
+        if not service_list:
+            return
+        if not depth:
+            return
+        elements = self.u2(clickable='true')
+        if not elements:
+            return
+        print(f'elem_len={len(elements)}')
+        # todo elements order filter
+        package_name = self.package_name
+        # xml_hierarchy = self.u2.dump_hierarchy()
+        # with open(f'xml_hierarchy.xml', 'w', encoding='utf-8') as f:
+        #     f.write(xml_hierarchy)
+        #     return
+        elements_info = [element.info for element in elements]
+        for element_info in elements_info:
+            if not service_list:
+                return
+            # following two lines only for testing
+            content_desc = element_info.get('contentDescription', '')
+            if '返回' in content_desc:
+                continue
+            class_name = element_info.get('className', '')
+            if class_name in ['android.view.View', 'android.view.ViewGroup',
+                              'android.widget.RelativeLayout']:
+                continue
+            print(f'content_desc={content_desc}')
+            print(f'class_name={class_name}')
+
+            hstg.add_event(element_info)
+            hstg.handle_event(hstg.events[-1])
+            # element.click()
+            time.sleep(1)
+
+            if hstg.add_state()[1]:
+                audio_status = self.adb.get_audio_status(package_name)
+                if audio_status:
+                    # todo tocheck
+                    keys = [key.split(":")[-1] for key, value in audio_status.items() if
+                            key.split(":")[-1] in service_list and value in ['START', 'START*', 'DUCK']]
+                    if keys:
+                        print(f'keys={keys}')
+                        service_list = list(set(service_list) - set(keys))
+                        print(f'service_list={service_list}')
+                hstg.add_edge()
+                self.test_explore_dfs(depth - 1, hstg, service_list)
+                # 回退至上个state
+                hstg.back_state(hstg.visit_states[-2])
+            else:
+                self.test_explore_dfs(depth - 1, hstg, service_list)
+                # 回退至本个state
+                hstg.back_state(hstg.visit_states[-1])
+        return
