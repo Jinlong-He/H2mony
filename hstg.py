@@ -1,7 +1,5 @@
 import time
 import xml.etree.ElementTree as ET
-from lxml import etree
-import difflib
 from view import View
 from window import Window
 import cv
@@ -10,13 +8,13 @@ state_num = 0
 
 
 class State(object):
-    def __init__(self, act_name, audio_status, views, root):
+    def __init__(self, act_name, audio_status, views, window):
         self.act_name = act_name
         self.audio_status = audio_status
         global state_num
         self.id = state_num
         self.views = views
-        self.root = root
+        self.window = window
 
     def isequal(self, other):
         if isinstance(other, State):
@@ -27,47 +25,17 @@ class State(object):
 
     def similarity(self, other):
         if isinstance(other, State):
-            # xml str
-            # str_self = ET.tostring(self.root, encoding='utf-8').decode('utf-8')
-            # str_other = ET.tostring(other.root, encoding='utf-8').decode('utf-8')
-            # similarity = difflib.SequenceMatcher(None, str_self, str_other).ratio()
-
-            # node bound
-            self_bounds_list = [node.attrib['bound'] for node in self.root.iter('node')]
-            self_bounds_list_len = len(self_bounds_list)
-            print(f'self_bounds_list_len={self_bounds_list_len}')
-            other_bounds_list = [node.attrib['bound'] for node in other.root.iter('node')]
-            other_bounds_list_len = len(other_bounds_list)
-            print(f'other_bounds_list_len={other_bounds_list_len}')
-            same_bounds = 0
-            for self_bounds in self_bounds_list:
-                if self_bounds in other_bounds_list:
-                    same_bounds += 1
-            print(f'same_bounds={same_bounds}')
-            similarity = same_bounds*2/(self_bounds_list_len+other_bounds_list_len)
-
-            # class
-            # self_class_list = [node.attrib['class'] for node in self.root.iter('node')]
-            # self_class_list_len = len(self_class_list)
-            # print(f'self_class_list_len={self_class_list_len}')
-            # other_class_list = [node.attrib['class'] for node in other.root.iter('node')]
-            # other_class_list_len = len(other_class_list)
-            # print(f'other_class_list_len={other_class_list_len}')
-            # self_class_dict = {}
-            # other_class_dict = {}
-            # for self_class in self_class_list:
-            #     self_class_dict[self_class] = self_class_dict.get(self_class, 0) + 1
-            # for other_class in other_class_list:
-            #     other_class_dict[other_class] = other_class_dict.get(other_class, 0) + 1
-            # same_class_count = 0
-            # for key, value in self_class_dict.items():
-            #     same_class_count += min(other_class_dict.get(key, 0), value)
-            # print(f'same_class_count={same_class_count}')
-            # similarity = same_class_count*2/(self_class_list_len+other_class_list_len)
-            print(f'similarity={round(similarity, 2)} '
-                  f'state[{self.id}] <-> state[{other.id}]')
-            if similarity > 0.9:
+            bounds_sim = self.window.bounds_similarity(other.window)
+            img_sim = self.window.img_similarity(other.window)
+            print(f'state[{self.id}]<->state[{other.id}] '
+                  f'bounds_sim={round(bounds_sim,2)} img_sim={round(img_sim,2)}')
+            if img_sim > 0.99 or bounds_sim > 0.99:
                 return True
+            if img_sim > 0.9 and bounds_sim > 0.7:
+                return True
+            if bounds_sim > 0.9 and img_sim > 0.7:
+                return True
+            return False
         return False
 
 
@@ -129,8 +97,8 @@ class HSTG(object):
         package_name = self.adb.get_current_package()
         act_name = self.adb.get_current_activity()
         audio_status = self.adb.get_audio_status(package_name)
-        (views, root) = self.dump_views()
-        state = State(act_name, audio_status, views, root)
+        (views, window) = self.dump_views()
+        state = State(act_name, audio_status, views, window)
 
         if state.isequal(check_state):
             print(f"--done: back to state[{state_id}]")
@@ -142,8 +110,8 @@ class HSTG(object):
             package_name = self.adb.get_current_package()
             act_name = self.adb.get_current_activity()
             audio_status = self.adb.get_audio_status(package_name)
-            (views, root) = self.dump_views()
-            state = State(act_name, audio_status, views, root)
+            (views, window) = self.dump_views()
+            state = State(act_name, audio_status, views, window)
             if state.isequal(check_state):
                 print(f"--done: back to state[{state_id}]")
                 return
@@ -188,8 +156,8 @@ class HSTG(object):
         package_name = self.device.adb.get_current_package()
         act_name = self.device.adb.get_current_activity()
         audio_status = self.device.adb.get_audio_status(package_name)
-        (views, root) = self.dump_views()
-        state = State(act_name, audio_status, views, root)
+        (views, window) = self.dump_views()
+        state = State(act_name, audio_status, views, window)
         for s in self.states:
             if state.isequal(s):
                 return (state, False)
@@ -232,15 +200,18 @@ class HSTG(object):
         return
 
     def dump_views(self):
-        window = Window()
-        window.img = cv.load_image_from_buf(self.device.minicap.last_sreen)
-        window.img_dhash = cv.calculate_dhash(window.img)
-        ui_xml = self.u2.dump_hierarchy()
-        root = ET.fromstring(ui_xml.encode("utf-8"))
+        elements = self.u2(clickable='true')
+        elements_info = [element.info for element in elements]
+
+        bounds_set = set()
         views = []
-        for node in root.iter('node'):
-            view = View(node, 'xml')
+        for element_info in elements_info:
+            view = View(element_info, 'info')
             views.append(view)
-            # node.attrib = {'bounds': node.attrib['bounds'], 'class': node.attrib['class']}
-            node.attrib = {'bound': view.bound}
-        return (views, root)
+            bounds = tuple(view.bound)
+            bounds_set.add(bounds)
+
+        window = Window(bounds_set)
+        window.img = cv.load_image_from_buf(self.device.minicap.last_screen)
+        window.img_dhash = cv.calculate_dhash(window.img)
+        return views, window

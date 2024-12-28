@@ -1,11 +1,5 @@
-from device import Device
-from app import App
-from hstg import HSTG
-from view import View
 import time
-import uiautomator2
 import xml.etree.ElementTree as ET
-import random
 
 
 class Explorer(object):
@@ -118,17 +112,7 @@ class Explorer(object):
             return
         if not depth:
             return
-        # elements = self.u2(clickable='true')
-        # if not elements:
-        #     return
-        # print(f'elem_len={len(elements)}')
-        # todo elements order filter
         package_name = self.package_name
-        # xml_hierarchy = self.u2.dump_hierarchy()
-        # with open(f'xml_hierarchy.xml', 'w', encoding='utf-8') as f:
-        #     f.write(xml_hierarchy)
-        #     return
-        # elements_info = [element.info for element in elements]
         views = hstg.states[hstg.visit_states[-1]].views
         for view in views:
             if not service_list:
@@ -148,7 +132,6 @@ class Explorer(object):
 
             hstg.add_event(view.bound)
             hstg.handle_event(hstg.events[-1])
-            # element.click()
 
             if hstg.add_state()[1]:
                 audio_status = self.adb.get_audio_status(package_name)
@@ -168,14 +151,4 @@ class Explorer(object):
                 # 回退至本个state
                 hstg.back_state(hstg.visit_states[-1])
         return
-
-    # def dump_views(self):
-    #     ui_xml = self.u2.dump_hierarchy()
-    #     root = ET.fromstring(ui_xml.encode("utf-8"))
-    #     views = []
-    #     for node in root.iter('node'):
-    #         view = View(node, 'xml')
-    #         views.append(view)
-    #         node.attrib = {'bounds': node.attrib['bounds']}
-    #     return (views, root)
 
