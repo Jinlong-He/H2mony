@@ -13,7 +13,8 @@ class Window(object):
         l = self.bounds
         r = other.bounds
         bounds_sim = len(l.intersection(r))/len(l.union(r))
-        return bounds_sim
+        bounds_diff = max(len(l.difference(r)), len(r.difference(l)))
+        return bounds_sim, bounds_diff
 
     def img_similarity(self, other):
         if self.img_dhash == '':

@@ -141,7 +141,7 @@ class ADB(object):
         else:
             return
 
-    def get_audio_status(self, package_name):
+    def get_audio_status(self, package_name, orientation=0):
         """
         Get the audio status of given app on the device
         :return: a dict, each key is a package name of an app and each value is the file path to the apk
@@ -150,6 +150,8 @@ class ADB(object):
         audio_line_re = re.compile(".*u/pid:(.*)/(.*) .*state:(.*) attr.*")
         audio_status_dict = {}
         started_count = 0
+        if orientation:
+            audio_lines = reversed(audio_lines)
         for audio_line in audio_lines:
             m = audio_line_re.match(audio_line)
             if m:
